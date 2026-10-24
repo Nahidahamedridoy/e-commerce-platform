@@ -1,26 +1,146 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core Brand Colors */
+  --background: #10131F;
+  --foreground: #F4F3ED;
+
+  /* Card Surfaces */
+  --card: #22283A;
+  --card-hover: #2B334B;
+  --card-border: #2E364F;
+
+  /* Accents */
+  --accent-lime: #C6F36A;
+  --accent-lime-hover: #D5F788;
+  --accent-coral: #FF8066;
+  --accent-coral-hover: #FF9580;
+
+  /* Text Hierarchies */
+  --text-primary: #F4F3ED;
+  --text-muted: #9AA3B8;
+  --text-subtle: #657189;
+
+  /* Borders & Lines */
+  --border-default: #2E364F;
+  --border-subtle: #1C2233;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  --color-background: #10131F;
+  --color-foreground: #F4F3ED;
+
+  /* Semantic Design Tokens */
+  --color-card: #22283A;
+  --color-card-hover: #2B334B;
+  --color-card-border: #2E364F;
+
+  --color-accent-lime: #C6F36A;
+  --color-accent-lime-hover: #D5F788;
+  --color-accent-lime-muted: rgba(198, 243, 106, 0.15);
+
+  --color-accent-coral: #FF8066;
+  --color-accent-coral-hover: #FF9580;
+  --color-accent-coral-muted: rgba(255, 128, 102, 0.15);
+
+  --color-text-primary: #F4F3ED;
+  --color-text-muted: #9AA3B8;
+  --color-text-subtle: #657189;
+
+  --color-border-default: #2E364F;
+  --color-border-subtle: #1C2233;
+
+  /* Direct aliases for convenience */
+  --color-dark-bg: #10131F;
+  --color-dark-card: #22283A;
+  --color-brand-lime: #C6F36A;
+  --color-brand-coral: #FF8066;
+  --color-dark-text: #F4F3ED;
+
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Force dark color scheme and prohibit white background */
+html {
+  color-scheme: dark;
+  background-color: #10131F;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #10131F;
+  color: #F4F3ED;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Custom Design System Utility Classes */
+.glow-lime {
+  box-shadow: 0 0 25px -4px rgba(198, 243, 106, 0.35);
+}
+
+.glow-coral {
+  box-shadow: 0 0 25px -4px rgba(255, 128, 102, 0.35);
+}
+
+.card-glass {
+  background: rgba(34, 40, 58, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(46, 54, 79, 0.7);
+}
+
+.card-gradient-border {
+  position: relative;
+  background: #22283A;
+  border-radius: 1rem;
+}
+
+.card-gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(198, 243, 106, 0.4), rgba(46, 54, 79, 0.2), rgba(255, 128, 102, 0.3));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom Scrollbar for Dark Theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #10131F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2E364F;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3A4462;
+}
+
+::selection {
+  background: rgba(198, 243, 106, 0.3);
+  color: #F4F3ED;
 }
