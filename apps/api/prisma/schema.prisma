@@ -1,0 +1,23 @@
+// Prisma Schema for Amar Dokan Backend
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Initial health check model to verify database connectivity when configured
+// Business models (User, Product, Order, Customer, etc.) will be introduced in subsequent phases
+model HealthCheck {
+  id        String   @id @default(uuid())
+  status    String   @default("ok")
+  checkedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("health_checks")
+}

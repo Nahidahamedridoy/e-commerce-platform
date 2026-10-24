@@ -2,6 +2,7 @@
 
 import React, { useEffect, useCallback } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { setCartDrawerOpen } from "@/store/slices/uiSlice";
 import {
@@ -21,8 +22,14 @@ import {
 import { Button } from "@/components/ui/Button";
 
 export const CartDrawer: React.FC = () => {
+  const pathname = usePathname();
   const dispatch = useAppDispatch();
   const isOpen = useAppSelector((state) => state.ui.isCartDrawerOpen);
+
+  // Skip rendering on /admin routes
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
   const { items, totalQuantity, totalAmount } = useAppSelector(
     (state) => state.cart
   );

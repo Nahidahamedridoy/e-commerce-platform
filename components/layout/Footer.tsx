@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -17,6 +18,13 @@ import {
 } from "@/components/ui/Icons";
 
 export const Footer: React.FC = () => {
+  const pathname = usePathname();
+
+  // Skip rendering storefront footer on /admin routes
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
+
   const scrollToTop = () => {
     window.scrollTo({
       top: 0,

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { toggleCartDrawer, toggleMobileMenu } from "@/store/slices/uiSlice";
 import {
@@ -29,6 +29,7 @@ export const SAMPLE_CATEGORIES = [
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const dispatch = useAppDispatch();
   const totalCartQuantity = useAppSelector((state) => state.cart.totalQuantity);
 
@@ -36,6 +37,11 @@ export const Navbar: React.FC = () => {
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Skip rendering storefront navbar on /admin routes
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   // Monitor scroll for elevation styling
   useEffect(() => {
@@ -181,6 +187,21 @@ export const Navbar: React.FC = () => {
                 >
                   <SparklesIcon className="w-2.5 h-2.5 mr-0.5" />
                   HOT
+                </Badge>
+              </Link>
+
+              {/* Admin Portal Link */}
+              <Link
+                href="/admin"
+                className="relative flex items-center gap-1.5 py-1 text-[#9AA3B8] transition-colors duration-200 hover:text-[#C6F36A] group"
+              >
+                <span>Admin</span>
+                <Badge
+                  variant="lime"
+                  size="sm"
+                  className="px-1.5 py-0 text-[8px] font-bold tracking-wider"
+                >
+                  DASH
                 </Badge>
               </Link>
             </nav>
