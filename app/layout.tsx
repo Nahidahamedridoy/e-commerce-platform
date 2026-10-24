@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://amardokan.com"),
   title: "Amar Dokan | Premium Dark E-Commerce",
   description:
     "Amar Dokan - Unique dark e-commerce shopping experience with modern aesthetics.",

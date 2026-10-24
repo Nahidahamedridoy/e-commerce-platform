@@ -231,7 +231,7 @@ export const Navbar: React.FC = () => {
 
               {/* Desktop Auth Links */}
               <div className="hidden sm:flex items-center gap-2">
-                <Link href="/#login">
+                <Link href="/login">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -242,7 +242,7 @@ export const Navbar: React.FC = () => {
                   </Button>
                 </Link>
 
-                <Link href="/#register">
+                <Link href="/register">
                   <Button
                     variant="lime"
                     size="sm"

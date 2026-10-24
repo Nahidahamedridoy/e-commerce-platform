@@ -203,7 +203,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ categories }) => {
         <div className="p-5 border-t border-[#2E364F] space-y-4 bg-[#171B2B]/30">
           {/* Auth Buttons */}
           <div className="grid grid-cols-2 gap-3">
-            <Link href="/#login" onClick={handleClose} className="w-full">
+            <Link href="/login" onClick={handleClose} className="w-full">
               <Button
                 variant="card"
                 size="md"
@@ -213,7 +213,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ categories }) => {
                 <span>Login</span>
               </Button>
             </Link>
-            <Link href="/#register" onClick={handleClose} className="w-full">
+            <Link href="/register" onClick={handleClose} className="w-full">
               <Button
                 variant="lime"
                 size="md"
