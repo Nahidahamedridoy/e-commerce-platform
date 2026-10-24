@@ -266,7 +266,7 @@ export const CartDrawer: React.FC = () => {
               </div>
             </div>
 
-            <Link href="/#checkout" onClick={handleClose} className="block w-full">
+            <Link href="/checkout" onClick={handleClose} className="block w-full">
               <Button
                 variant="lime"
                 size="lg"

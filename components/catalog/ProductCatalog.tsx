@@ -13,10 +13,11 @@ import {
   RotateCcwIcon,
   ChevronDownIcon,
 } from "@/components/ui/Icons";
-import { ProductCard } from "@/components/home/ProductCard";
+import { ProductCard, ProductItem } from "@/components/home/ProductCard";
 import { ALL_PRODUCTS } from "@/lib/data/products";
+import { productsApi, categoriesApi } from "@/lib/api";
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   "All",
   "Electronics",
   "Fashion",
@@ -38,16 +39,21 @@ export const ProductCatalog: React.FC = () => {
   const searchParams = useSearchParams();
   const initialCategoryParam = searchParams.get("category");
 
+  const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [apiProducts, setApiProducts] = useState<ProductItem[] | null>(null);
+  const [isProductsLoading, setIsProductsLoading] = useState(true);
+  const [backendStatus, setBackendStatus] = useState<"connected" | "fallback">("fallback");
+
   // Derive initial category from URL parameter without an effect
   const initialCategory = useMemo(() => {
     if (!initialCategoryParam) return "All";
-    const match = CATEGORIES.find(
+    const match = categoriesList.find(
       (c) =>
         c.toLowerCase().replace(/[^a-z0-9]/g, "-") ===
         initialCategoryParam.toLowerCase()
     );
     return match || "All";
-  }, [initialCategoryParam]);
+  }, [initialCategoryParam, categoriesList]);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,6 +66,46 @@ export const ProductCatalog: React.FC = () => {
   const [onlyDeals, setOnlyDeals] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<string>("featured");
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // Fetch live products & categories from Express backend
+  useEffect(() => {
+    let mounted = true;
+    setIsProductsLoading(true);
+
+    Promise.allSettled([
+      productsApi.getAll({ limit: 100 }),
+      categoriesApi.getAll(),
+    ]).then(([prodRes, catRes]) => {
+      if (!mounted) return;
+
+      if (catRes.status === "fulfilled" && catRes.value && catRes.value.length > 0) {
+        setCategoriesList(["All", ...catRes.value.map((c) => c.name)]);
+      }
+
+      if (prodRes.status === "fulfilled" && prodRes.value?.products?.length > 0) {
+        const mapped: ProductItem[] = prodRes.value.products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category?.name || "General",
+          price: p.price,
+          rating: 4.8,
+          reviewCount: 16,
+          image: p.images?.[0] || "/images/hero-showcase.jpg",
+          badge: p.stock > 0 && p.stock < 5 ? ("LIMITED" as any) : undefined,
+        }));
+        setApiProducts(mapped);
+        setBackendStatus("connected");
+      } else {
+        setApiProducts(null);
+        setBackendStatus("fallback");
+      }
+      setIsProductsLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Lock body scroll when mobile filter is open
   useEffect(() => {
@@ -83,9 +129,13 @@ export const ProductCatalog: React.FC = () => {
     return count;
   }, [selectedCategory, searchQuery, maxPrice, minPrice, onlyDeals]);
 
+  const sourceProducts = useMemo(() => {
+    return apiProducts && apiProducts.length > 0 ? apiProducts : ALL_PRODUCTS;
+  }, [apiProducts]);
+
   // Filter & Sort Logic
   const filteredProducts = useMemo(() => {
-    return ALL_PRODUCTS.filter((product) => {
+    return sourceProducts.filter((product) => {
       // Category filter
       if (selectedCategory !== "All" && product.category !== selectedCategory) {
         return false;
@@ -116,16 +166,16 @@ export const ProductCatalog: React.FC = () => {
         return (b.discountPercentage || 0) - (a.discountPercentage || 0);
       return 0; // featured (default order)
     });
-  }, [selectedCategory, minPrice, maxPrice, onlyDeals, searchQuery, sortBy]);
+  }, [sourceProducts, selectedCategory, minPrice, maxPrice, onlyDeals, searchQuery, sortBy]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: ALL_PRODUCTS.length };
-    ALL_PRODUCTS.forEach((p) => {
+    const counts: Record<string, number> = { All: sourceProducts.length };
+    sourceProducts.forEach((p) => {
       counts[p.category] = (counts[p.category] || 0) + 1;
     });
     return counts;
-  }, []);
+  }, [sourceProducts]);
 
   // Reset all filters
   const handleResetFilters = () => {

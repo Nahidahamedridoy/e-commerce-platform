@@ -2,6 +2,10 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAppDispatch } from "@/store/hooks";
+import { setCredentials } from "@/store/slices/authSlice";
+import { authApi, ApiError } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
@@ -18,6 +22,9 @@ import {
 } from "@/components/ui/Icons";
 
 export const RegisterForm: React.FC = () => {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,6 +42,7 @@ export const RegisterForm: React.FC = () => {
     agreeTerms?: string;
   }>({});
 
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -104,6 +112,7 @@ export const RegisterForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setApiError(null);
 
     if (!validate()) {
       return;
@@ -112,13 +121,30 @@ export const RegisterForm: React.FC = () => {
     setIsLoading(true);
     setSuccessMessage(null);
 
-    // Simulate registration processing
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const data = await authApi.register({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      dispatch(setCredentials({ user: data.user, token: data.token }));
       setSuccessMessage(
-        `Account created for ${name.trim()}! A confirmation email has been dispatched to ${email.trim()}.`
+        `Account created successfully for ${data.user.name}! Redirecting...`
       );
-    }, 1200);
+
+      setTimeout(() => {
+        router.push("/");
+      }, 800);
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        setApiError(err.message || "Registration failed. Please review your information.");
+      } else {
+        setApiError("Cannot reach auth server at http://localhost:5000/api. Ensure server is running.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSocialRegister = (provider: string) => {
@@ -131,6 +157,22 @@ export const RegisterForm: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* API Error Notification Banner */}
+      {apiError && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-[#FF8066]/15 border border-[#FF8066]/40 flex items-start gap-3 text-xs sm:text-sm text-[#FF8066] animate-fade-in"
+        >
+          <div className="h-5 w-5 rounded-full bg-[#FF8066]/20 flex items-center justify-center shrink-0 mt-0.5">
+            <AlertCircleIcon className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex-1">
+            <span className="font-bold">Registration Error: </span>
+            <span>{apiError}</span>
+          </div>
+        </div>
+      )}
+
       {/* Success Notification Banner */}
       {successMessage && (
         <div
@@ -141,7 +183,7 @@ export const RegisterForm: React.FC = () => {
             <CheckIcon className="w-3.5 h-3.5" />
           </div>
           <div className="flex-1">
-            <span className="font-bold">Registration Demo: </span>
+            <span className="font-bold">Registration: </span>
             <span>{successMessage}</span>
           </div>
         </div>

@@ -2,6 +2,10 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAppDispatch } from "@/store/hooks";
+import { setCredentials } from "@/store/slices/authSlice";
+import { authApi, ApiError } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import {
@@ -17,12 +21,18 @@ import {
 } from "@/components/ui/Icons";
 
 export const LoginForm: React.FC = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
+  const redirectUrl = searchParams.get("redirect") || "/";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -52,6 +62,7 @@ export const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotNotice(null);
+    setApiError(null);
 
     if (!validate()) {
       return;
@@ -60,13 +71,31 @@ export const LoginForm: React.FC = () => {
     setIsLoading(true);
     setSuccessMessage(null);
 
-    // Simulate authentication processing
-    setTimeout(() => {
+    try {
+      const data = await authApi.login({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      dispatch(setCredentials({ user: data.user, token: data.token }));
+      setSuccessMessage(`Welcome back, ${data.user.name}! Redirecting...`);
+
+      setTimeout(() => {
+        if (data.user.role === "ADMIN") {
+          router.push(redirectUrl === "/" ? "/admin" : redirectUrl);
+        } else {
+          router.push(redirectUrl);
+        }
+      }, 700);
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        setApiError(err.message || "Failed to sign in. Please verify your credentials.");
+      } else {
+        setApiError("Cannot reach auth server at http://localhost:5000/api. Ensure server is running.");
+      }
+    } finally {
       setIsLoading(false);
-      setSuccessMessage(
-        `Welcome back! Signed in successfully as ${email.trim()}`
-      );
-    }, 1200);
+    }
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -90,6 +119,22 @@ export const LoginForm: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* API Error Notification Banner */}
+      {apiError && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-[#FF8066]/15 border border-[#FF8066]/40 flex items-start gap-3 text-xs sm:text-sm text-[#FF8066] animate-fade-in"
+        >
+          <div className="h-5 w-5 rounded-full bg-[#FF8066]/20 flex items-center justify-center shrink-0 mt-0.5">
+            <AlertCircleIcon className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex-1">
+            <span className="font-bold">Authentication Error: </span>
+            <span>{apiError}</span>
+          </div>
+        </div>
+      )}
+
       {/* Success Notification Banner */}
       {successMessage && (
         <div
@@ -100,7 +145,7 @@ export const LoginForm: React.FC = () => {
             <CheckIcon className="w-3.5 h-3.5" />
           </div>
           <div className="flex-1">
-            <span className="font-bold">Authentication Demo: </span>
+            <span className="font-bold">Sign In: </span>
             <span>{successMessage}</span>
           </div>
         </div>

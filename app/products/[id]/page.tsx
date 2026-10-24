@@ -6,10 +6,51 @@ import { Badge } from "@/components/ui/Badge";
 import { SearchIcon, RotateCcwIcon, ArrowRightIcon } from "@/components/ui/Icons";
 import { ProductCard } from "@/components/home/ProductCard";
 import { ProductDetailsView } from "@/components/product";
-import { ALL_PRODUCTS, getProductById, getRelatedProducts } from "@/lib/data/products";
+import { ALL_PRODUCTS, getProductById, getRelatedProducts, ProductDetail } from "@/lib/data/products";
+import { productsApi } from "@/lib/api";
 
 interface ProductPageProps {
   params: Promise<{ id: string }>;
+}
+
+async function resolveProduct(idOrSlug: string): Promise<ProductDetail | null> {
+  try {
+    const apiProd = await productsApi.getById(idOrSlug);
+    if (apiProd) {
+      return {
+        id: apiProd.id,
+        name: apiProd.name,
+        category: apiProd.category?.name || "General",
+        price: apiProd.price,
+        rating: 4.8,
+        reviewCount: 24,
+        image: apiProd.images?.[0] || "/images/hero-showcase.jpg",
+        description: apiProd.description,
+        gallery: apiProd.images?.length
+          ? apiProd.images
+          : ["/images/hero-showcase.jpg", "/images/cat-accessories.jpg"],
+        features: [
+          "Engineered with precision components and premium materials",
+          "Official 1-Year Amar Dokan Brand Warranty Included",
+          "Fast Express Courier Delivery across all 64 districts",
+          "7-Day Hassle-free replacement guarantee",
+        ],
+        specs: [
+          { label: "Category", value: apiProd.category?.name || "General" },
+          { label: "Stock Level", value: `${apiProd.stock} units in warehouse` },
+          { label: "Authenticity", value: "100% Genuine Guaranteed" },
+          { label: "Condition", value: "Factory Sealed Brand New" },
+        ],
+        stockCount: apiProd.stock,
+        sku: `AD-${apiProd.id.slice(0, 8).toUpperCase()}`,
+        availability: apiProd.stock > 0 ? "in_stock" : "out_of_stock",
+        estimatedDelivery: "24 - 48 Hours Across Bangladesh",
+      };
+    }
+  } catch {
+    // Graceful fallback to static/sample product
+  }
+  return getProductById(idOrSlug) || null;
 }
 
 export async function generateStaticParams() {
@@ -22,7 +63,7 @@ export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { id } = await params;
-  const product = getProductById(id);
+  const product = await resolveProduct(id);
 
   if (!product) {
     return {
@@ -44,7 +85,7 @@ export async function generateMetadata({
 
 export default async function ProductDetailPage({ params }: ProductPageProps) {
   const { id } = await params;
-  const product = getProductById(id);
+  const product = await resolveProduct(id);
 
   // Handle Invalid Product ID State
   if (!product) {

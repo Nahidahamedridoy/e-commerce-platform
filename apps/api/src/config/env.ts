@@ -12,4 +12,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || '',
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV !== 'production',
+  jwtSecret: process.env.JWT_SECRET || 'fallback_dev_secret',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  bcryptRounds: 10,
 };

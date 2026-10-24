@@ -201,28 +201,68 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ categories }) => {
 
         {/* Bottom Actions & Support */}
         <div className="p-5 border-t border-[#2E364F] space-y-4 bg-[#171B2B]/30">
-          {/* Auth Buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <Link href="/login" onClick={handleClose} className="w-full">
-              <Button
-                variant="card"
-                size="md"
-                className="w-full flex items-center justify-center gap-1.5"
-              >
-                <UserIcon className="w-4 h-4 text-[#9AA3B8]" />
-                <span>Login</span>
-              </Button>
-            </Link>
-            <Link href="/register" onClick={handleClose} className="w-full">
-              <Button
-                variant="lime"
-                size="md"
-                className="w-full flex items-center justify-center shadow-[0_0_15px_rgba(198,243,106,0.25)]"
-              >
-                <span>Register</span>
-              </Button>
-            </Link>
-          </div>
+          {/* Auth State in Mobile Menu */}
+          {useAppSelector((state) => state.auth).isAuthenticated &&
+          useAppSelector((state) => state.auth).user ? (
+            <div className="p-3 rounded-2xl bg-[#22283A] border border-[#2E364F] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-[#F4F3ED]">
+                    {useAppSelector((state) => state.auth).user?.name}
+                  </p>
+                  <p className="text-[11px] text-[#9AA3B8] font-mono truncate">
+                    {useAppSelector((state) => state.auth).user?.email}
+                  </p>
+                </div>
+                {useAppSelector((state) => state.auth).user?.role === "ADMIN" && (
+                  <Badge variant="lime" size="sm" className="px-1.5 py-0 text-[8px] font-black">
+                    ADMIN
+                  </Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#2E364F]/50">
+                <Link
+                  href="/orders"
+                  onClick={handleClose}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#171B2B] text-center text-[#F4F3ED] hover:text-[#C6F36A]"
+                >
+                  My Orders
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dispatch({ type: "auth/logout" });
+                    handleClose();
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#FF8066]/10 text-center text-[#FF8066] hover:bg-[#FF8066]/20 cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/login" onClick={handleClose} className="w-full">
+                <Button
+                  variant="card"
+                  size="md"
+                  className="w-full flex items-center justify-center gap-1.5"
+                >
+                  <UserIcon className="w-4 h-4 text-[#9AA3B8]" />
+                  <span>Login</span>
+                </Button>
+              </Link>
+              <Link href="/register" onClick={handleClose} className="w-full">
+                <Button
+                  variant="lime"
+                  size="md"
+                  className="w-full flex items-center justify-center shadow-[0_0_15px_rgba(198,243,106,0.25)]"
+                >
+                  <span>Register</span>
+                </Button>
+              </Link>
+            </div>
+          )}
 
           {/* Quick Support Info */}
           <div className="pt-3 border-t border-[#2E364F]/50 text-xs text-[#657189] space-y-2">

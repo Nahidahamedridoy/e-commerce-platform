@@ -18,6 +18,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { MobileMenu } from "./MobileMenu";
 
+import { logout } from "@/store/slices/authSlice";
+import { categoriesApi } from "@/lib/api";
+
 export const SAMPLE_CATEGORIES = [
   { name: "Electronics", slug: "electronics", count: 120 },
   { name: "Fashion", slug: "fashion", count: 85 },
@@ -32,16 +35,39 @@ export const Navbar: React.FC = () => {
   const pathname = usePathname();
   const dispatch = useAppDispatch();
   const totalCartQuantity = useAppSelector((state) => state.cart.totalQuantity);
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
 
+  const [categories, setCategories] = useState(SAMPLE_CATEGORIES);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Skip rendering storefront navbar on /admin routes
-  if (pathname?.startsWith("/admin")) {
-    return null;
-  }
+  // Fetch real categories from Express API on mount
+  useEffect(() => {
+    let mounted = true;
+    categoriesApi
+      .getAll()
+      .then((data) => {
+        if (mounted && data && data.length > 0) {
+          setCategories(
+            data.map((c) => ({
+              name: c.name,
+              slug: c.slug,
+              count: c._count?.products || 0,
+            }))
+          );
+        }
+      })
+      .catch(() => {
+        // Graceful fallback to default categories
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Monitor scroll for elevation styling
   useEffect(() => {
@@ -52,7 +78,7 @@ export const Navbar: React.FC = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close categories dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -60,6 +86,12 @@ export const Navbar: React.FC = () => {
         !dropdownRef.current.contains(event.target as Node)
       ) {
         setIsCategoriesOpen(false);
+      }
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsUserMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -71,6 +103,12 @@ export const Navbar: React.FC = () => {
     if (searchQuery.trim()) {
       router.push(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
     }
+  };
+
+  const handleSignOut = () => {
+    dispatch(logout());
+    setIsUserMenuOpen(false);
+    router.push("/");
   };
 
   return (
@@ -154,7 +192,7 @@ export const Navbar: React.FC = () => {
                       Curated Collections
                     </div>
                     <div className="mt-1 space-y-0.5">
-                      {SAMPLE_CATEGORIES.map((cat) => (
+                      {categories.map((cat) => (
                         <Link
                           key={cat.slug}
                           href={`/shop?category=${cat.slug}`}
@@ -250,28 +288,97 @@ export const Navbar: React.FC = () => {
                 </span>
               </button>
 
-              {/* Desktop Auth Links */}
+              {/* Desktop Auth Links / Profile Dropdown */}
               <div className="hidden sm:flex items-center gap-2">
-                <Link href="/login">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-10 px-3.5 gap-1.5 hover:text-[#F4F3ED] hover:bg-[#22283A] transition-colors"
-                  >
-                    <UserIcon className="w-4 h-4 text-[#9AA3B8]" />
-                    <span>Login</span>
-                  </Button>
-                </Link>
+                {isAuthenticated && user ? (
+                  <div className="relative" ref={userMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                      className="flex items-center gap-2.5 h-10 px-3 rounded-xl bg-[#22283A] border border-[#2E364F] hover:border-[#C6F36A] text-[#F4F3ED] transition-all cursor-pointer focus:outline-none"
+                    >
+                      <div className="h-6 w-6 rounded-lg bg-[#C6F36A]/20 text-[#C6F36A] font-bold text-xs flex items-center justify-center">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-xs font-semibold max-w-[100px] truncate">
+                        {user.name.split(" ")[0]}
+                      </span>
+                      {user.role === "ADMIN" && (
+                        <Badge variant="lime" size="sm" className="px-1.5 py-0 text-[8px] font-black">
+                          ADMIN
+                        </Badge>
+                      )}
+                      <ChevronDownIcon
+                        className={`w-3.5 h-3.5 text-[#9AA3B8] transition-transform duration-200 ${
+                          isUserMenuOpen ? "rotate-180 text-[#C6F36A]" : ""
+                        }`}
+                      />
+                    </button>
 
-                <Link href="/register">
-                  <Button
-                    variant="lime"
-                    size="sm"
-                    className="text-xs h-10 px-4 font-bold shadow-[0_0_16px_rgba(198,243,106,0.3)] hover:shadow-[0_0_24px_rgba(198,243,106,0.5)] transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transform-none"
-                  >
-                    <span>Register</span>
-                  </Button>
-                </Link>
+                    {isUserMenuOpen && (
+                      <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[#22283A] border border-[#2E364F] p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="px-3 py-2 border-b border-[#2E364F]/60">
+                          <p className="text-xs font-bold text-[#F4F3ED] truncate">{user.name}</p>
+                          <p className="text-[11px] text-[#9AA3B8] truncate font-mono">{user.email}</p>
+                        </div>
+                        <div className="py-1 space-y-0.5">
+                          <Link
+                            href="/orders"
+                            onClick={() => setIsUserMenuOpen(false)}
+                            className="flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[#F4F3ED] hover:bg-[#10131F] hover:text-[#C6F36A] transition-colors"
+                          >
+                            <span>My Orders</span>
+                            <span className="text-[10px] text-[#9AA3B8]">View all</span>
+                          </Link>
+                          {user.role === "ADMIN" && (
+                            <Link
+                              href="/admin"
+                              onClick={() => setIsUserMenuOpen(false)}
+                              className="flex items-center justify-between px-3 py-2 rounded-xl text-xs text-[#C6F36A] hover:bg-[#10131F] transition-colors"
+                            >
+                              <span>Admin Dashboard</span>
+                              <Badge variant="lime" size="sm" className="px-1 py-0 text-[8px]">
+                                DASH
+                              </Badge>
+                            </Link>
+                          )}
+                        </div>
+                        <div className="pt-1 border-t border-[#2E364F]/60">
+                          <button
+                            type="button"
+                            onClick={handleSignOut}
+                            className="w-full text-left px-3 py-2 rounded-xl text-xs text-[#FF8066] hover:bg-[#FF8066]/10 transition-colors cursor-pointer"
+                          >
+                            Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <Link href="/login">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-10 px-3.5 gap-1.5 hover:text-[#F4F3ED] hover:bg-[#22283A] transition-colors"
+                      >
+                        <UserIcon className="w-4 h-4 text-[#9AA3B8]" />
+                        <span>Login</span>
+                      </Button>
+                    </Link>
+
+                    <Link href="/register">
+                      <Button
+                        variant="lime"
+                        size="sm"
+                        className="text-xs h-10 px-4 font-bold shadow-[0_0_16px_rgba(198,243,106,0.3)] hover:shadow-[0_0_24px_rgba(198,243,106,0.5)] transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transform-none"
+                      >
+                        <span>Register</span>
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
 
               {/* Mobile Hamburger Menu Button */}
@@ -289,7 +396,7 @@ export const Navbar: React.FC = () => {
       </header>
 
       {/* Responsive Mobile Drawer */}
-      <MobileMenu categories={SAMPLE_CATEGORIES} />
+      <MobileMenu categories={categories} />
     </>
   );
 };
