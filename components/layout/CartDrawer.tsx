@@ -26,10 +26,6 @@ export const CartDrawer: React.FC = () => {
   const dispatch = useAppDispatch();
   const isOpen = useAppSelector((state) => state.ui.isCartDrawerOpen);
 
-  // Skip rendering on /admin routes
-  if (pathname?.startsWith("/admin")) {
-    return null;
-  }
   const { items, totalQuantity, totalAmount } = useAppSelector(
     (state) => state.cart
   );
@@ -67,6 +63,11 @@ export const CartDrawer: React.FC = () => {
     100,
     Math.round((totalAmount / freeShippingThreshold) * 100)
   );
+
+  // Skip rendering on /admin routes
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   return (
     <div

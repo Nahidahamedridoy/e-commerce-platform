@@ -328,7 +328,7 @@ export const ProductCatalog: React.FC = () => {
                   Category
                 </h4>
                 <div className="space-y-1">
-                  {CATEGORIES.map((cat) => (
+                  {categoriesList.map((cat) => (
                     <button
                       key={cat}
                       type="button"
@@ -591,7 +591,7 @@ export const ProductCatalog: React.FC = () => {
                   Category
                 </h4>
                 <div className="space-y-1">
-                  {CATEGORIES.map((cat) => (
+                  {categoriesList.map((cat) => (
                     <button
                       key={cat}
                       type="button"
