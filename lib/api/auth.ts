@@ -1,5 +1,5 @@
 import { apiClient, setStoredAuth, clearStoredAuth } from "./client";
-import { ApiUser, AuthResponseData, ApiResponse } from "./types";
+import { ApiUser, AuthResponseData } from "./types";
 
 export interface RegisterPayload {
   name: string;

@@ -70,7 +70,6 @@ export const ProductCatalog: React.FC = () => {
   // Fetch live products & categories from Express backend
   useEffect(() => {
     let mounted = true;
-    setIsProductsLoading(true);
 
     Promise.allSettled([
       productsApi.getAll({ limit: 100 }),
@@ -91,7 +90,7 @@ export const ProductCatalog: React.FC = () => {
           rating: 4.8,
           reviewCount: 16,
           image: p.images?.[0] || "/images/hero-showcase.jpg",
-          badge: p.stock > 0 && p.stock < 5 ? ("LIMITED" as any) : undefined,
+          badge: p.stock > 0 && p.stock < 5 ? ("HOT" as const) : undefined,
         }));
         setApiProducts(mapped);
         setBackendStatus("connected");
@@ -231,10 +230,24 @@ export const ProductCatalog: React.FC = () => {
           {/* Live Product Counter */}
           <div className="self-start md:self-end">
             <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#22283A] border border-[#2E364F] text-xs font-mono text-[#F4F3ED]">
-              <span className="h-2 w-2 rounded-full bg-[#C6F36A]" />
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isProductsLoading
+                    ? "bg-[#FFB800] animate-pulse"
+                    : backendStatus === "connected"
+                    ? "bg-[#C6F36A]"
+                    : "bg-[#9AA3B8]"
+                }`}
+              />
               <span>
-                Showing <strong>{filteredProducts.length}</strong> of{" "}
-                <strong>{ALL_PRODUCTS.length}</strong> Products
+                {isProductsLoading ? (
+                  "Loading catalog..."
+                ) : (
+                  <>
+                    Showing <strong>{filteredProducts.length}</strong> of{" "}
+                    <strong>{sourceProducts.length}</strong> Products
+                  </>
+                )}
               </span>
             </span>
           </div>

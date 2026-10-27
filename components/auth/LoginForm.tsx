@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch } from "@/store/hooks";
 import { setCredentials } from "@/store/slices/authSlice";
@@ -87,9 +86,11 @@ export const LoginForm: React.FC = () => {
           router.push(redirectUrl);
         }
       }, 700);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError) {
         setApiError(err.message || "Failed to sign in. Please verify your credentials.");
+      } else if (err instanceof Error) {
+        setApiError(err.message);
       } else {
         setApiError("Cannot reach auth server at http://localhost:5000/api. Ensure server is running.");
       }

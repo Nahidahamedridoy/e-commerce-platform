@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppDispatch } from "@/store/hooks";
 import { setCredentials } from "@/store/slices/authSlice";
@@ -136,9 +135,11 @@ export const RegisterForm: React.FC = () => {
       setTimeout(() => {
         router.push("/");
       }, 800);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError) {
         setApiError(err.message || "Registration failed. Please review your information.");
+      } else if (err instanceof Error) {
+        setApiError(err.message);
       } else {
         setApiError("Cannot reach auth server at http://localhost:5000/api. Ensure server is running.");
       }

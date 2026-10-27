@@ -1,23 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { AdminProduct } from "@/types/admin";
-import { ArrowRightIcon, ChevronLeftIcon, CheckIcon, SparklesIcon } from "@/components/ui/Icons";
+import {
+  productsApi,
+  categoriesApi,
+  ApiCategory,
+  ApiError,
+  ensureValidImageUrl,
+} from "@/lib/api";
+import { ChevronLeftIcon, CheckIcon, AlertCircleIcon } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
-
-const CATEGORIES = [
-  "Electronics",
-  "Fashion",
-  "Home & Living",
-  "Beauty & Care",
-  "Accessories",
-  "Lifestyle",
-] as const;
 
 const PRESET_IMAGES = [
   { label: "Studio Headphones", url: "/images/hero-showcase.jpg" },
@@ -32,12 +30,16 @@ const PRESET_IMAGES = [
 export default function NewProductPage() {
   const router = useRouter();
 
+  // Dynamic categories from API
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<AdminProduct["category"]>("Electronics");
   const [price, setPrice] = useState<number>(12500);
   const [originalPrice, setOriginalPrice] = useState<number | undefined>(14500);
   const [stock, setStock] = useState<number>(25);
-  const [sku, setSku] = useState(`SKU-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [sku, setSku] = useState("SKU-2490");
   const [status, setStatus] = useState<AdminProduct["status"]>("published");
   const [badge, setBadge] = useState<AdminProduct["badge"]>("NEW");
   const [image, setImage] = useState("/images/hero-showcase.jpg");
@@ -46,7 +48,31 @@ export default function NewProductPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Fetch categories from backend
+  useEffect(() => {
+    let mounted = true;
+    categoriesApi
+      .getAll()
+      .then((cats) => {
+        if (!mounted) return;
+        setCategories(cats || []);
+        if (cats && cats.length > 0) {
+          setSelectedCategoryId(cats[0].id);
+        }
+      })
+      .catch(() => {
+        // Fallback: allow page to render even if categories fail
+      })
+      .finally(() => {
+        if (mounted) setCategoriesLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -55,46 +81,40 @@ export default function NewProductPage() {
     if (stock < 0) errs.stock = "Stock cannot be negative";
     if (!description.trim()) errs.description = "Description is required";
     if (!image.trim()) errs.image = "Product image is required";
+    if (!selectedCategoryId && categories.length > 0) {
+      errs.category = "Please select a category";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
+    setApiError(null);
 
-    setTimeout(() => {
-      let stockStatus: AdminProduct["stockStatus"] = "in_stock";
-      if (Number(stock) === 0) stockStatus = "out_of_stock";
-      else if (Number(stock) <= 8) stockStatus = "low_stock";
+    try {
+      const validImg = ensureValidImageUrl(image);
 
-      const newProduct: AdminProduct = {
-        id: `prod-${Date.now()}`,
-        name: name.trim(),
-        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-        sku: sku || `SKU-${Date.now().toString().slice(-4)}`,
-        category,
-        price: Number(price),
-        originalPrice: originalPrice ? Number(originalPrice) : undefined,
-        stock: Number(stock),
-        stockStatus,
-        status,
-        image: image.trim(),
-        description: description.trim(),
-        rating: 5.0,
-        reviewCount: 1,
-        salesCount: 0,
-        badge: badge || undefined,
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("admin:product-added", { detail: newProduct })
-        );
+      let targetCategoryId = selectedCategoryId;
+      if (!targetCategoryId && categories.length > 0) {
+        targetCategoryId = categories[0].id;
       }
+
+      if (!targetCategoryId) {
+        throw new Error("No category found on server. Please ensure at least one category exists.");
+      }
+
+      await productsApi.create({
+        name: name.trim(),
+        description: description.trim(),
+        price: Number(price),
+        stock: Number(stock),
+        images: [validImg],
+        categoryId: targetCategoryId,
+      });
 
       setIsSubmitting(false);
       setSuccess(true);
@@ -102,7 +122,16 @@ export default function NewProductPage() {
       setTimeout(() => {
         router.push("/admin/products");
       }, 1200);
-    }, 500);
+    } catch (err: unknown) {
+      setIsSubmitting(false);
+      if (err instanceof ApiError) {
+        setApiError(err.message || "Failed to create product on server.");
+      } else if (err instanceof Error) {
+        setApiError(err.message);
+      } else {
+        setApiError("Failed to save product to backend API.");
+      }
+    }
   };
 
   return (
@@ -142,6 +171,25 @@ export default function NewProductPage() {
         </div>
       )}
 
+      {apiError && (
+        <div className="p-4 rounded-xl bg-[#FF8066]/15 border border-[#FF8066] text-[#FF8066] flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <AlertCircleIcon className="w-5 h-5 shrink-0" />
+            <div className="text-xs">
+              <p className="font-bold">Failed to create product</p>
+              <p className="text-[#9AA3B8] mt-0.5">{apiError}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setApiError(null)}
+            className="text-[#FF8066] hover:underline text-xs font-bold cursor-pointer shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Form Card */}
       <form
         onSubmit={handleSubmit}
@@ -175,16 +223,25 @@ export default function NewProductPage() {
                 Category <span className="text-[#FF8066]">*</span>
               </label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as AdminProduct["category"])}
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
                 className="w-full h-11 bg-[#10131F] text-[#F4F3ED] text-sm rounded-xl border border-[#2E364F] px-3.5 focus:border-[#C6F36A] outline-none transition-all"
               >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
+                {categoriesLoading ? (
+                  <option value="">Loading categories...</option>
+                ) : categories.length === 0 ? (
+                  <option value="">No categories found</option>
+                ) : (
+                  categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))
+                )}
               </select>
+              {errors.category && (
+                <p className="mt-1 text-xs text-[#FF8066]">{errors.category}</p>
+              )}
             </div>
 
             <div>
@@ -403,10 +460,17 @@ export default function NewProductPage() {
           <Button
             type="submit"
             variant="lime"
-            disabled={isSubmitting}
+            disabled={isSubmitting || success}
             className="min-w-36 shadow-[0_0_15px_rgba(198,243,106,0.3)] hover:shadow-[0_0_20px_rgba(198,243,106,0.5)]"
           >
-            {isSubmitting ? "Publishing..." : "Publish Product"}
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-[#10131F] border-t-transparent rounded-full animate-spin" />
+                Publishing...
+              </span>
+            ) : (
+              "Publish Product"
+            )}
           </Button>
         </div>
       </form>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { toggleCartDrawer, toggleMobileMenu } from "@/store/slices/uiSlice";
 import {
@@ -32,7 +32,6 @@ export const SAMPLE_CATEGORIES = [
 
 export const Navbar: React.FC = () => {
   const router = useRouter();
-  const pathname = usePathname();
   const dispatch = useAppDispatch();
   const totalCartQuantity = useAppSelector((state) => state.cart.totalQuantity);
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
@@ -228,7 +227,8 @@ export const Navbar: React.FC = () => {
                 </Badge>
               </Link>
 
-              {/* Admin Portal Link */}
+              {/* Admin Portal Link (Temporarily hidden from public navbar) */}
+              {/*
               <Link
                 href="/admin"
                 className="relative flex items-center gap-1.5 py-1 text-[#9AA3B8] transition-colors duration-200 hover:text-[#C6F36A] group"
@@ -242,6 +242,7 @@ export const Navbar: React.FC = () => {
                   DASH
                 </Badge>
               </Link>
+              */}
             </nav>
 
             {/* 3. Search Bar (Desktop) */}

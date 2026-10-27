@@ -92,7 +92,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
               href={footerLinkHref}
               className="font-bold text-[#C6F36A] hover:underline transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#C6F36A] rounded"
             >
-              {footerLinkHref === "/login" ? "Sign in" : "Sign up"}
+              {footerLinkText}
             </Link>
           </div>
         </div>

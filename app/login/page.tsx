@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { AuthLayout, LoginForm } from "@/components/auth";
 
 export const metadata: Metadata = {
@@ -18,7 +19,15 @@ export default function LoginPage() {
       footerLinkText="Sign up"
       footerLinkHref="/register"
     >
-      <LoginForm />
+      <Suspense
+        fallback={
+          <div className="py-12 flex items-center justify-center text-[#9AA3B8]">
+            <span className="h-3 w-3 rounded-full bg-[#C6F36A] animate-pulse" />
+          </div>
+        }
+      >
+        <LoginForm />
+      </Suspense>
     </AuthLayout>
   );
 }

@@ -15,33 +15,36 @@ export interface UpdateCategoryPayload {
 
 export const categoriesApi = {
   async getAll(): Promise<ApiCategory[]> {
-    const res = await apiClient<ApiCategory[]>("/categories", {
+    const res = await apiClient<{ categories: ApiCategory[] }>("/categories", {
       method: "GET",
     });
-    return res.data || [];
+    return res.data?.categories || [];
   },
 
   async getById(idOrSlug: string): Promise<ApiCategory> {
-    const res = await apiClient<ApiCategory>(`/categories/${encodeURIComponent(idOrSlug)}`, {
-      method: "GET",
-    });
-    return res.data!;
+    const res = await apiClient<{ category: ApiCategory }>(
+      `/categories/${encodeURIComponent(idOrSlug)}`,
+      {
+        method: "GET",
+      }
+    );
+    return res.data!.category;
   },
 
   async create(payload: CreateCategoryPayload): Promise<ApiCategory> {
-    const res = await apiClient<ApiCategory>("/categories", {
+    const res = await apiClient<{ category: ApiCategory }>("/categories", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res.data!;
+    return res.data!.category;
   },
 
   async update(id: string, payload: UpdateCategoryPayload): Promise<ApiCategory> {
-    const res = await apiClient<ApiCategory>(`/categories/${id}`, {
+    const res = await apiClient<{ category: ApiCategory }>(`/categories/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    return res.data!;
+    return res.data!.category;
   },
 
   async delete(id: string): Promise<void> {

@@ -13,7 +13,8 @@ export interface CreateOrderPayload {
   paymentMethod?: string;
 }
 
-export interface GetOrdersQuery {
+export interface GetOrdersQuery
+  extends Record<string, string | number | undefined> {
   status?: OrderStatus;
   page?: number;
   limit?: number;
@@ -26,48 +27,57 @@ export interface UpdateOrderStatusPayload {
 
 export const ordersApi = {
   async create(payload: CreateOrderPayload): Promise<ApiOrder> {
-    const res = await apiClient<ApiOrder>("/orders", {
+    const res = await apiClient<{ order: ApiOrder }>("/orders", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res.data!;
+    return res.data!.order;
   },
 
   async getMyOrders(query?: GetOrdersQuery): Promise<OrdersResponseData> {
-    const res = await apiClient<OrdersResponseData>("/orders/my-orders", {
+    const res = await apiClient<{ orders: ApiOrder[] }>("/orders/my-orders", {
       method: "GET",
-      params: query as any,
+      params: query,
     });
-    return res.data || { orders: [], meta: {} };
+    return {
+      orders: res.data?.orders || [],
+      meta: res.meta || {},
+    };
   },
 
   async getAllOrders(query?: GetOrdersQuery): Promise<OrdersResponseData> {
-    const res = await apiClient<OrdersResponseData>("/orders", {
+    const res = await apiClient<{ orders: ApiOrder[] }>("/orders", {
       method: "GET",
-      params: query as any,
+      params: query,
     });
-    return res.data || { orders: [], meta: {} };
+    return {
+      orders: res.data?.orders || [],
+      meta: res.meta || {},
+    };
   },
 
   async getById(id: string): Promise<ApiOrder> {
-    const res = await apiClient<ApiOrder>(`/orders/${id}`, {
+    const res = await apiClient<{ order: ApiOrder }>(`/orders/${id}`, {
       method: "GET",
     });
-    return res.data!;
+    return res.data!.order;
   },
 
   async cancelOrder(id: string): Promise<ApiOrder> {
-    const res = await apiClient<ApiOrder>(`/orders/${id}/cancel`, {
+    const res = await apiClient<{ order: ApiOrder }>(`/orders/${id}/cancel`, {
       method: "POST",
     });
-    return res.data!;
+    return res.data!.order;
   },
 
-  async updateStatus(id: string, payload: UpdateOrderStatusPayload): Promise<ApiOrder> {
-    const res = await apiClient<ApiOrder>(`/orders/${id}/status`, {
+  async updateStatus(
+    id: string,
+    payload: UpdateOrderStatusPayload
+  ): Promise<ApiOrder> {
+    const res = await apiClient<{ order: ApiOrder }>(`/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
-    return res.data!;
+    return res.data!.order;
   },
 };

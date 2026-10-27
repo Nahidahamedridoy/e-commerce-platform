@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Image from "next/image";
-import { ADMIN_SAMPLE_ORDERS } from "@/lib/data/adminSampleData";
 import { AdminOrder, OrderFulfillmentStatus, OrderPaymentStatus } from "@/types/admin";
+import {
+  ordersApi,
+  ApiError,
+  mapApiOrderToAdminOrder,
+} from "@/lib/api";
+import type { OrderStatus } from "@/lib/api";
 import {
   ShoppingBagIcon,
   SearchIcon,
-  FilterIcon,
   CheckIcon,
-  ClockIcon,
-  TruckIcon,
   AlertCircleIcon,
   RefreshCwIcon,
 } from "@/components/ui/Icons";
@@ -19,24 +21,85 @@ import { Badge } from "@/components/ui/Badge";
 import { OrderDetailsModal } from "@/components/admin/OrderDetailsModal";
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<AdminOrder[]>(ADMIN_SAMPLE_ORDERS);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFulfillment, setSelectedFulfillment] = useState("all");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
-  };
+  }, []);
 
-  const handleStatusUpdate = (orderId: string, newStatus: OrderFulfillmentStatus) => {
-    setOrders((prev) =>
-      prev.map((ord) => (ord.id === orderId ? { ...ord, fulfillmentStatus: newStatus } : ord))
-    );
-    showToast(`Order status updated to ${newStatus.toUpperCase()}`);
-  };
+  // Fetch orders from API
+  const fetchOrders = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await ordersApi.getAllOrders({ limit: 100 });
+      setOrders((data.orders || []).map(mapApiOrderToAdminOrder));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to load orders from the server.";
+      setLoadError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    ordersApi
+      .getAllOrders({ limit: 100 })
+      .then((data) => {
+        if (!ignore) {
+          setOrders((data.orders || []).map(mapApiOrderToAdminOrder));
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          const msg = err instanceof ApiError ? err.message : "Failed to load orders from the server.";
+          setLoadError(msg);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  // Update order status via API
+  const handleStatusUpdate = useCallback(
+    async (orderId: string, newStatus: OrderFulfillmentStatus) => {
+      try {
+        // Map admin fulfillment status to API OrderStatus (uppercase)
+        const apiStatus = newStatus.toUpperCase() as OrderStatus;
+        await ordersApi.updateStatus(orderId, { status: apiStatus });
+        setOrders((prev) =>
+          prev.map((ord) =>
+            ord.id === orderId ? { ...ord, fulfillmentStatus: newStatus } : ord
+          )
+        );
+        // Also update the selected order if it's the one being updated
+        setSelectedOrder((prev) =>
+          prev && prev.id === orderId ? { ...prev, fulfillmentStatus: newStatus } : prev
+        );
+        showToast(`Order status updated to ${newStatus.toUpperCase()}`);
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : "Failed to update order status.";
+        showToast(`Error: ${msg}`);
+      }
+    },
+    [showToast]
+  );
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -126,12 +189,12 @@ export default function AdminOrdersPage() {
             variant="card"
             size="sm"
             onClick={() => {
-              setOrders(ADMIN_SAMPLE_ORDERS);
-              showToast("Orders reset to default sample dataset.");
+              fetchOrders();
+              showToast("Refreshing orders from server...");
             }}
           >
             <RefreshCwIcon className="w-3.5 h-3.5 mr-1" />
-            <span>Reset Demo</span>
+            <span>Refresh</span>
           </Button>
         </div>
       </div>
@@ -266,16 +329,42 @@ export default function AdminOrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E364F]/50">
-              {filteredOrders.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-[#9AA3B8]">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-2 border-[#C6F36A] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-[#9AA3B8]">Loading orders from server...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-[#9AA3B8]">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <AlertCircleIcon className="w-8 h-8 text-[#FF8066]" />
+                      <p className="font-semibold text-sm text-[#FF8066]">
+                        Failed to load orders
+                      </p>
+                      <p className="text-xs text-[#657189] max-w-md">{loadError}</p>
+                      <Button type="button" variant="card" size="sm" onClick={fetchOrders} className="mt-2">
+                        <RefreshCwIcon className="w-3.5 h-3.5 mr-1" /> Retry
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-[#9AA3B8]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <ShoppingBagIcon className="w-8 h-8 text-[#657189]" />
                       <p className="font-semibold text-sm text-[#F4F3ED]">
-                        No matching orders found
+                        {orders.length === 0 ? "No orders yet" : "No matching orders found"}
                       </p>
                       <p className="text-xs text-[#657189]">
-                        Try searching for another customer name or order number
+                        {orders.length === 0
+                          ? "Orders will appear here when customers place them"
+                          : "Try searching for another customer name or order number"}
                       </p>
                     </div>
                   </td>

@@ -94,12 +94,14 @@ export default function CheckoutPage() {
       const order = await ordersApi.create(orderPayload);
       setConfirmedOrder(order);
       dispatch(clearCart());
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError) {
         setApiError(
           err.message ||
             "Order creation failed. If this is a local setup, ensure PostgreSQL is provisioned."
         );
+      } else if (err instanceof Error) {
+        setApiError(err.message);
       } else {
         setApiError(
           "Network error connecting to backend API at http://localhost:5000/api."

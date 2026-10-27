@@ -103,10 +103,10 @@ export async function apiClient<T>(
       ...customConfig,
     });
 
-    let data: any;
+    let data: Record<string, unknown> | null = null;
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
-      data = await response.json();
+      data = (await response.json()) as Record<string, unknown>;
     } else {
       const text = await response.text();
       data = { success: response.ok, message: text };
@@ -114,27 +114,28 @@ export async function apiClient<T>(
 
     if (!response.ok) {
       const errorMessage =
-        data?.message ||
-        data?.error?.message ||
+        (typeof data?.message === "string" ? data.message : null) ||
+        (typeof (data?.error as Record<string, unknown>)?.message === "string"
+          ? ((data?.error as Record<string, unknown>).message as string)
+          : null) ||
         `Request failed with status ${response.status}`;
       throw new ApiError(
         errorMessage,
         response.status,
-        data?.errors || data?.error?.details,
+        data?.errors || (data?.error as Record<string, unknown>)?.details,
         data
       );
     }
 
-    return data as ApiResponse<T>;
-  } catch (error: any) {
+    return (data as unknown) as ApiResponse<T>;
+  } catch (error: unknown) {
     if (error instanceof ApiError) {
       throw error;
     }
-    throw new ApiError(
-      error?.message || "Network request failed. Is the API server running?",
-      0,
-      undefined,
-      error
-    );
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Network request failed. Is the API server running?";
+    throw new ApiError(message, 0, undefined, error);
   }
 }

@@ -3,10 +3,18 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { AdminProduct } from "@/types/admin";
-import { CloseIcon, UploadIcon, CheckIcon, SparklesIcon } from "@/components/ui/Icons";
+import { CloseIcon } from "@/components/ui/Icons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
+import {
+  categoriesApi,
+  productsApi,
+  ApiCategory,
+  ApiError,
+  ensureValidImageUrl,
+  mapApiProductToAdminProduct,
+} from "@/lib/api";
 
 interface ProductFormModalProps {
   isOpen: boolean;
@@ -14,15 +22,6 @@ interface ProductFormModalProps {
   onSave: (product: AdminProduct) => void;
   initialProduct?: AdminProduct | null;
 }
-
-const CATEGORIES = [
-  "Electronics",
-  "Fashion",
-  "Home & Living",
-  "Beauty & Care",
-  "Accessories",
-  "Lifestyle",
-] as const;
 
 const PRESET_IMAGES = [
   { label: "Studio Headphones", url: "/images/hero-showcase.jpg" },
@@ -42,8 +41,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 }) => {
   const isEditing = Boolean(initialProduct);
 
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<AdminProduct["category"]>("Electronics");
+  const [category, setCategory] = useState<string>("Electronics");
   const [price, setPrice] = useState<number>(10000);
   const [originalPrice, setOriginalPrice] = useState<number | undefined>(undefined);
   const [stock, setStock] = useState<number>(20);
@@ -53,9 +54,38 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [image, setImage] = useState("/images/hero-showcase.jpg");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    let mounted = true;
+    categoriesApi
+      .getAll()
+      .then((cats) => {
+        if (!mounted) return;
+        setCategories(cats || []);
+        if (cats && cats.length > 0) {
+          const match = initialProduct
+            ? cats.find(
+                (c) =>
+                  c.name.toLowerCase() === initialProduct.category.toLowerCase()
+              )
+            : null;
+          setSelectedCategoryId(match ? match.id : cats[0].id);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [initialProduct]);
+
+  const currentKey = `${isOpen ? "open" : "closed"}-${initialProduct?.id || "new"}`;
+  const [prevKey, setPrevKey] = useState(currentKey);
+
+  if (currentKey !== prevKey) {
+    setPrevKey(currentKey);
+    setApiError(null);
     if (initialProduct) {
       setName(initialProduct.name);
       setCategory(initialProduct.category);
@@ -67,20 +97,27 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setBadge(initialProduct.badge);
       setImage(initialProduct.image);
       setDescription(initialProduct.description);
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === initialProduct.category.toLowerCase()
+      );
+      if (match) setSelectedCategoryId(match.id);
     } else {
       setName("");
-      setCategory("Electronics");
+      setCategory(categories[0]?.name || "Electronics");
       setPrice(8500);
       setOriginalPrice(9900);
       setStock(15);
-      setSku(`SKU-${Math.floor(1000 + Math.random() * 9000)}`);
+      setSku("SKU-2048");
       setStatus("published");
       setBadge("NEW");
       setImage("/images/hero-showcase.jpg");
       setDescription("Premium handcrafted product engineered for modern aesthetics and high durability.");
+      if (categories.length > 0) {
+        setSelectedCategoryId(categories[0].id);
+      }
     }
     setErrors({});
-  }, [initialProduct, isOpen]);
+  }
 
   if (!isOpen) return null;
 
@@ -89,47 +126,75 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (!name.trim()) newErrors.name = "Product name is required";
     if (price <= 0) newErrors.price = "Price must be greater than 0";
     if (stock < 0) newErrors.stock = "Stock cannot be negative";
-    if (!description.trim()) newErrors.description = "Description is required";
+    if (!description.trim()) {
+      newErrors.description = "Description is required";
+    } else if (description.trim().length < 10) {
+      newErrors.description = "Description must be at least 10 characters";
+    }
     if (!image.trim()) newErrors.image = "Product image is required";
+    if (!selectedCategoryId && categories.length > 0) {
+      newErrors.category = "Please select a category";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
+    setApiError(null);
 
-    setTimeout(() => {
-      let stockStatus: AdminProduct["stockStatus"] = "in_stock";
-      if (Number(stock) === 0) stockStatus = "out_of_stock";
-      else if (Number(stock) <= 8) stockStatus = "low_stock";
+    try {
+      const validImg = ensureValidImageUrl(image);
+      let savedProduct: AdminProduct;
 
-      const productData: AdminProduct = {
-        id: initialProduct?.id || `prod-${Date.now()}`,
-        name: name.trim(),
-        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-        sku: sku || `SKU-${Date.now().toString().slice(-4)}`,
-        category,
-        price: Number(price),
-        originalPrice: originalPrice ? Number(originalPrice) : undefined,
-        stock: Number(stock),
-        stockStatus,
-        status,
-        image: image.trim(),
-        description: description.trim(),
-        rating: initialProduct?.rating || 4.8,
-        reviewCount: initialProduct?.reviewCount || 1,
-        salesCount: initialProduct?.salesCount || 0,
-        badge: badge || undefined,
-        createdAt: initialProduct?.createdAt || new Date().toISOString().split("T")[0],
-      };
+      // If categoryId isn't chosen yet, fallback to first category or create
+      let targetCategoryId = selectedCategoryId;
+      if (!targetCategoryId && categories.length > 0) {
+        targetCategoryId = categories[0].id;
+      }
 
-      onSave(productData);
-      setIsSubmitting(false);
+      if (!targetCategoryId) {
+        throw new Error("No category found on server. Please ensure at least one category exists.");
+      }
+
+      if (initialProduct?.id) {
+        const updated = await productsApi.update(initialProduct.id, {
+          name: name.trim(),
+          description: description.trim(),
+          price: Number(price),
+          stock: Number(stock),
+          images: [validImg],
+          categoryId: targetCategoryId,
+        });
+        savedProduct = mapApiProductToAdminProduct(updated);
+      } else {
+        const created = await productsApi.create({
+          name: name.trim(),
+          description: description.trim(),
+          price: Number(price),
+          stock: Number(stock),
+          images: [validImg],
+          categoryId: targetCategoryId,
+        });
+        savedProduct = mapApiProductToAdminProduct(created);
+      }
+
+      onSave(savedProduct);
       onClose();
-    }, 400);
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setApiError(err.message || "Failed to save product on server.");
+      } else if (err instanceof Error) {
+        setApiError(err.message);
+      } else {
+        setApiError("Failed to save product to backend API.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -170,6 +235,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
         {/* Modal Body / Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+          {apiError && (
+            <div className="p-3.5 rounded-xl bg-[#FF8066]/15 border border-[#FF8066] text-[#FF8066] text-xs flex items-center justify-between">
+              <span>{apiError}</span>
+              <button
+                type="button"
+                onClick={() => setApiError(null)}
+                className="text-[#FF8066] hover:underline font-bold ml-2 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Section 1: Basic Information */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold font-mono tracking-wider text-[#9AA3B8] uppercase border-b border-[#2E364F]/50 pb-1.5">
@@ -198,16 +276,27 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   Category <span className="text-[#FF8066]">*</span>
                 </label>
                 <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as AdminProduct["category"])}
-                  className="w-full h-11 bg-[#10131F] text-[#F4F3ED] text-sm rounded-xl border border-[#2E364F] px-3.5 focus:border-[#C6F36A] focus:ring-1 focus:ring-[#C6F36A] outline-none transition-all"
+                  value={selectedCategoryId}
+                  onChange={(e) => {
+                    setSelectedCategoryId(e.target.value);
+                    const found = categories.find((c) => c.id === e.target.value);
+                    if (found) setCategory(found.name);
+                  }}
+                  className="w-full h-11 bg-[#10131F] text-[#F4F3ED] text-sm rounded-xl border border-[#2E364F] px-3.5 focus:border-[#C6F36A] focus:ring-1 focus:ring-[#C6F36A] outline-none transition-all cursor-pointer"
                 >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
+                  {categories.length === 0 ? (
+                    <option value="">Loading categories...</option>
+                  ) : (
+                    categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))
+                  )}
                 </select>
+                {errors.category && (
+                  <p className="mt-1 text-xs text-[#FF8066]">{errors.category}</p>
+                )}
               </div>
 
               <div>

@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ADMIN_SAMPLE_PRODUCTS } from "@/lib/data/adminSampleData";
 import { AdminProduct } from "@/types/admin";
+import {
+  productsApi,
+  categoriesApi,
+  ApiCategory,
+  ApiError,
+  mapApiProductToAdminProduct,
+} from "@/lib/api";
 import {
   PackageIcon,
   SearchIcon,
@@ -25,7 +31,10 @@ import { ProductFormModal } from "@/components/admin/ProductFormModal";
 import { DeleteConfirmModal } from "@/components/admin/DeleteConfirmModal";
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<AdminProduct[]>(ADMIN_SAMPLE_PRODUCTS);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedStockStatus, setSelectedStockStatus] = useState("all");
@@ -35,25 +44,67 @@ export default function AdminProductsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<AdminProduct | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
-  // Listen to global "admin:product-added" event
-  useEffect(() => {
-    const handleGlobalAdd = (e: Event) => {
-      const customEvent = e as CustomEvent<AdminProduct>;
-      if (customEvent.detail) {
-        setProducts((prev) => [customEvent.detail, ...prev]);
-        showToast(`Product "${customEvent.detail.name}" added successfully.`);
-      }
-    };
-    window.addEventListener("admin:product-added", handleGlobalAdd);
-    return () => window.removeEventListener("admin:product-added", handleGlobalAdd);
-  }, []);
-
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setFeedbackToast(message);
     setTimeout(() => setFeedbackToast(null), 3500);
-  };
+  }, []);
+
+  // Fetch products from the API
+  const fetchProducts = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await productsApi.getAll({ limit: 100, sortBy: "createdAt", sortOrder: "desc" });
+      setProducts((data.products || []).map(mapApiProductToAdminProduct));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to load products from the server.";
+      setLoadError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch categories from the API
+  const fetchCategories = useCallback(async () => {
+    try {
+      const cats = await categoriesApi.getAll();
+      setCategories(cats || []);
+    } catch {
+      // Categories are non-critical; filters will remain static if API fails
+    }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    Promise.all([
+      productsApi.getAll({ limit: 100, sortBy: "createdAt", sortOrder: "desc" }),
+      categoriesApi.getAll().catch(() => []),
+    ])
+      .then(([productsData, cats]) => {
+        if (!ignore) {
+          setProducts((productsData.products || []).map(mapApiProductToAdminProduct));
+          if (cats) setCategories(cats);
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          const msg = err instanceof ApiError ? err.message : "Failed to load products from the server.";
+          setLoadError(msg);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -89,37 +140,50 @@ export default function AdminProductsPage() {
     return products.filter((p) => p.stockStatus === "out_of_stock").length;
   }, [products]);
 
-  // Save product (Add or Edit)
-  const handleSaveProduct = (product: AdminProduct) => {
-    if (editingProduct) {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? product : p))
-      );
-      showToast(`Product "${product.name}" updated successfully.`);
-    } else {
-      setProducts((prev) => [product, ...prev]);
-      showToast(`New product "${product.name}" created and added to inventory.`);
-    }
-    setEditingProduct(null);
-  };
+  // Save product (Add or Edit) — refetch list to keep in sync
+  const handleSaveProduct = useCallback(
+    (product: AdminProduct) => {
+      if (editingProduct) {
+        setProducts((prev) =>
+          prev.map((p) => (p.id === product.id ? product : p))
+        );
+        showToast(`Product "${product.name}" updated successfully.`);
+      } else {
+        setProducts((prev) => [product, ...prev]);
+        showToast(`New product "${product.name}" created and added to inventory.`);
+      }
+      setEditingProduct(null);
+    },
+    [editingProduct, showToast]
+  );
 
-  // Delete product
-  const handleDeleteProduct = () => {
+  // Delete product via API
+  const handleDeleteProduct = useCallback(async () => {
     if (!deletingProduct) return;
-    setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
-    showToast(`Product "${deletingProduct.name}" removed from local session.`);
-    setDeletingProduct(null);
-  };
+    setIsDeleting(true);
+    try {
+      await productsApi.delete(deletingProduct.id);
+      setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
+      showToast(`Product "${deletingProduct.name}" deleted from inventory.`);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Failed to delete product.";
+      showToast(`Error: ${msg}`);
+    } finally {
+      setIsDeleting(false);
+      setDeletingProduct(null);
+    }
+  }, [deletingProduct, showToast]);
 
-  // Reset to default sample data
-  const handleResetData = () => {
-    setProducts(ADMIN_SAMPLE_PRODUCTS);
+  // Refresh data from server
+  const handleRefreshData = useCallback(() => {
     setSearchQuery("");
     setSelectedCategory("all");
     setSelectedStockStatus("all");
     setSelectedStatus("all");
-    showToast("Product inventory reset to default sample dataset.");
-  };
+    fetchProducts();
+    fetchCategories();
+    showToast("Refreshing product data from server...");
+  }, [fetchProducts, fetchCategories, showToast]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -147,11 +211,11 @@ export default function AdminProductsPage() {
             type="button"
             variant="card"
             size="sm"
-            onClick={handleResetData}
-            title="Reset to default sample data"
+            onClick={handleRefreshData}
+            title="Refresh products from server"
           >
             <RefreshCwIcon className="w-3.5 h-3.5 mr-1" />
-            <span>Reset Demo</span>
+            <span>Refresh</span>
           </Button>
 
           <Button
@@ -233,19 +297,18 @@ export default function AdminProductsPage() {
             )}
           </div>
 
-          {/* Category Filter */}
+          {/* Category Filter — dynamic from API */}
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="h-10 bg-[#10131F] text-xs text-[#F4F3ED] rounded-xl border border-[#2E364F] px-3 focus:border-[#C6F36A] outline-none transition-all"
           >
             <option value="all">All Categories</option>
-            <option value="Electronics">Electronics</option>
-            <option value="Fashion">Fashion</option>
-            <option value="Home & Living">Home & Living</option>
-            <option value="Beauty & Care">Beauty & Care</option>
-            <option value="Accessories">Accessories</option>
-            <option value="Lifestyle">Lifestyle</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))}
           </select>
 
           {/* Stock Filter */}
@@ -310,16 +373,42 @@ export default function AdminProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2E364F]/50">
-              {filteredProducts.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center text-[#9AA3B8]">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-8 h-8 border-2 border-[#C6F36A] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-[#9AA3B8]">Loading products from server...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-[#9AA3B8]">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <AlertCircleIcon className="w-8 h-8 text-[#FF8066]" />
+                      <p className="font-semibold text-sm text-[#FF8066]">
+                        Failed to load products
+                      </p>
+                      <p className="text-xs text-[#657189] max-w-md">{loadError}</p>
+                      <Button type="button" variant="card" size="sm" onClick={fetchProducts} className="mt-2">
+                        <RefreshCwIcon className="w-3.5 h-3.5 mr-1" /> Retry
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-[#9AA3B8]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <PackageIcon className="w-8 h-8 text-[#657189]" />
                       <p className="font-semibold text-sm text-[#F4F3ED]">
-                        No matching products found
+                        {products.length === 0 ? "No products in inventory" : "No matching products found"}
                       </p>
                       <p className="text-xs text-[#657189]">
-                        Try adjusting your filters or search keywords
+                        {products.length === 0
+                          ? "Add your first product to get started"
+                          : "Try adjusting your filters or search keywords"}
                       </p>
                     </div>
                   </td>
